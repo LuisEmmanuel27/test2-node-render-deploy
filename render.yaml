@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: test-deploy-node-render
+    runtime: node
+    buildCommand: 'npm run build'
+    startCommand: 'npm start'
