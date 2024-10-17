@@ -1,428 +1,489 @@
-`Se retoma lo realizado en el proyecto pasado`
+`Se retoma lo realizado en el proyecto pasado - 4`
 
-# Despliegue en render.com
+1. En la carpeta /models/mysql crea el archivo `movie.js`
+2. En MySQL crea una nueva BD de nombre `movies_database`
+3. Creamos la tabla movies basados en el json de movies
+```sql
+CREATE TABLE MOVIE(
+  ID BINARY(16) NOT NULL PRIMARY KEY DEFAULT (UUID_TO_BIN(UUID())) COMMENT 'Primary Key',
+  TITLE VARCHAR(255) NOT NULL,
+  YEAR INT NOT NULL,
+  DIRECTOR VARCHAR(255) NOT NULL,
+  DURATION INT NOT NULL,
+  POSTER TEXT,
+  RATE DECIMAL(2, 1) UNSIGNED NOT NULL
+);
 
-1. ignorar el `.yaml` realmente no es necesario pero lo dejamos
-2. se modifica el package.json para poder hacer el deploy en `render.com`
-3. tenemos que tener el build `npm run build`
-4. tenemos que tener el start `npm start`
-5. lo subirmos a un repositorio el proyecto
-6. abrimos render.com y en crear web service vinculamos el repositorio y agregamos los comandos antes mencionados y la variable de entorno PORT
-7. listo nos debera dar una url que es donde esta nuestro sevicio web que si revisamos podremos ver que funciona a como si hacemos `npm run dev` en nuestro editor
+CREATE TABLE GENRE(
+  ID INT AUTO_INCREMENT PRIMARY KEY,
+  NAME VARCHAR(255) NOT NULL UNIQUE
+);
 
-# Pasando a ESModules
+-- relacion entre peliculas y generos
+CREATE TABLE MOVIE_GENRE(
+  MOVIE_ID BINARY(16) REFERENCES MOVIE(ID),
+  GENRE_ID INT REFERENCES GENRE(ID),
+  PRIMARY KEY (MOVIE_ID, GENRE_ID)
+);
 
-1. pasaremos de usar commonJS a el ya moderno y recomendado ESModules (import/export)
-2. en package.json agrega `"type": "module"`
-3. modificamos el `app.js`:
+-- agregando info al MOVIE_GENRE
+INSERT INTO GENRE (
+  NAME
+) VALUES (
+  'Drama'
+),
+(
+  'Action'
+),
+(
+  'Crime'
+),
+(
+  'Adventure'
+),
+(
+  'Sci-Fi'
+),
+(
+  'Romance'
+),
+(
+  'Biography'
+),
+(
+  'Fantasy'
+),
+(
+  'Animation'
+);
+
+-- agregando un par de peliculas
+INSERT INTO MOVIE (
+  ID,
+  TITLE,
+  YEAR,
+  DIRECTOR,
+  DURATION,
+  POSTER,
+  RATE
+) VALUES (
+  UUID_TO_BIN(UUID()),
+  "Interstellar",
+  2014,
+  "Christopher Nolan",
+  169,
+  "https://m.media-amazon.com/images/I/91obuWzA3XL._AC_UF1000,1000_QL80_.jpg",
+  8.6
+),
+(
+  UUID_TO_BIN(UUID()),
+  "The Shawshank Redemption",
+  1994,
+  "Frank Darabont",
+  142,
+  "https://i.ebayimg.com/images/g/4goAAOSwMyBe7hnQ/s-l1200.webp",
+  9.3
+),
+(
+  UUID_TO_BIN(UUID()),
+  "The Dark Knight",
+  2008,
+  "Christopher Nolan",
+  152,
+  "https://i.ebayimg.com/images/g/yokAAOSw8w1YARbm/s-l1200.jpg",
+  9.0
+),
+(
+  UUID_TO_BIN(UUID()),
+  "Inception",
+  2010,
+  "Christopher Nolan",
+  148,
+  "https://m.media-amazon.com/images/I/91Rc8cAmnAL._AC_UF1000,1000_QL80_.jpg",
+  8.8
+),
+(
+  UUID_TO_BIN(UUID()),
+  "Pulp Fiction",
+  1994,
+  "Quentin Tarantino",
+  154,
+  "https://www.themoviedb.org/t/p/original/vQWk5YBFWF4bZaofAbv0tShwBvQ.jpg",
+  8.9
+);
+
+-- agregando los generos de las peliculas
+INSERT INTO MOVIE_GENRE(
+  MOVIE_ID,
+  GENRE_ID
+) VALUES
+ -- Interstellar
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Interstellar'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Adventure')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Interstellar'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Drama')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Interstellar'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Sci-Fi')
+),
+ -- The Shawshank Redemption
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'The Shawshank Redemption'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Drama')
+),
+ -- The Dark Knight
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'The Dark Knight'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Action')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'The Dark Knight'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Crime')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'The Dark Knight'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Drama')
+),
+ -- Inception
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Inception'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Action')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Inception'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Adventure')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Inception'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Sci-Fi')
+),
+ -- Pulp Fiction
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Pulp Fiction'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Crime')
+),
+(
+  (SELECT ID FROM MOVIE WHERE TITLE = 'Pulp Fiction'),
+  (SELECT ID FROM GENRE WHERE NAME = 'Drama')
+);
+```
+
+4. De momento en /models/mysql/movie.js agregamos
 ```js
-import express, { json } from 'express'
-import { randomUUID } from 'node:crypto'
-import cors from 'cors'
-import { validateMovie, validatePartialMovie } from './schemas/moviesSchema.js'
+export class MovieModel {
+  static async getAll ({ genre }) {
 
-// Una forma de leer el json después de pasar a ESModules
-// import fs from 'node:fs'
-// const movies = JSON.parse(fs.readFileSync('./movies.json', 'utf-8'))
-
-// De forma recomendada de momento en ESModules para leer el json (creando nuestro propio require):
-import { createRequire } from 'node:module'
-const require = createRequire(import.meta.url)
-const movies = require('./movies.json')
-
-const app = express()
-
-// middleware del cors
-app.use(cors({
-  origin: (origin, callback) => {
-    const ACCEPTED_ORIGINS = [
-      'http://localhost:8080',
-      'http://localhost:1234',
-      'https://movies.com',
-      'https://midu.dev'
-    ]
-
-    if (ACCEPTED_ORIGINS.includes(origin)) {
-      return callback(null, true)
-    }
-
-    if (!origin) {
-      return callback(null, true)
-    }
-
-    return callback(new Error('Not allowed by CORS'))
   }
-}))
 
-app.disable('x-powered-by')
+  static async getById ({ id }) {
 
-app.use(json())
+  }
 
-app.get('/', (req, res) => {
-  res.json({ message: 'Hola Mundo' })
-})
+  static async create (input) {
 
-app.get('/movies', (req, res) => {
-  const { genre } = req.query
+  }
 
-  if (genre) {
-    const moviesFiltered = movies.filter(
-      movie => movie.genre.some(g => g.toLowerCase() === genre.toLowerCase())
+  static async delete ({ id }) {
+
+  }
+
+  static async update ({ id, input }) {
+
+  }
+}
+```
+
+5. Instalamos la dependencia `npm install --save mysql2`
+6. Modificaremos `/models/mysql/movie.js`:
+```js
+import mysql from 'mysql2/promise'
+
+const config = {
+  host: 'localhost',
+  user: 'root',
+  port: 3306,
+  password: 'Pantera09?',
+  database: 'movies_database'
+}
+
+const connection = await mysql.createConnection(config)
+
+export class MovieModel {
+  static async getAll ({ genre }) {
+    // retorna las movies y la info de la tabla, se desestructura para solo tener las movies
+    const [movies] = await connection.query(
+      'SELECT *, BIN_TO_UUID(ID) ID, TITLE, YEAR, DIRECTOR, DURATION, POSTER, RATE FROM MOVIE;'
     )
 
-    if (moviesFiltered.length === 0) return res.status(404).json({ message: 'Genre not found' })
-
-    return res.json(moviesFiltered)
+    return movies
   }
 
-  res.json(movies)
-})
+  static async getById ({ id }) {
 
-app.get('/movies/:id', (req, res) => {
-  const { id } = req.params
-  const movie = movies.find(movie => movie.id === id)
-
-  if (movie) return res.json(movie)
-
-  res.status(404).json({ message: 'Movie not found' })
-})
-
-app.post('/movies', (req, res) => {
-  const result = validateMovie(req.body)
-
-  // alternativa: if(!result.success)
-  if (result.error) {
-    return res.status(400).json({ error: JSON.parse(result.error.message) })
   }
 
-  const newMovie = {
-    id: randomUUID(),
-    ...result.data
+  static async create (input) {
+
   }
 
-  // SIMULANDO el REST, por que ya sabemos que esto no es lo correcto de guardar el estado en memoria
-  movies.push(newMovie)
+  static async delete ({ id }) {
 
-  res.status(201).json(newMovie)
-})
-
-app.patch('/movies/:id', (req, res) => {
-  const result = validatePartialMovie(req.body)
-
-  if (!result.success) {
-    return res.status(400).json({ error: JSON.parse(result.error.message) })
   }
 
-  const { id } = req.params
-  const movieIndex = movies.findIndex(movie => movie.id === id)
+  static async update ({ id, input }) {
 
-  if (movieIndex === -1) {
-    return res.status(404).json({ message: 'Movie not found' })
   }
-
-  const updateMovie = {
-    ...movies[movieIndex],
-    ...result.data
-  }
-
-  movies[movieIndex] = updateMovie
-
-  return res.json(updateMovie)
-})
-
-app.delete('/movies/:id', (req, res) => {
-  const { id } = req.params
-  const movieIndex = movies.findIndex(movie => movie.id === id)
-
-  if (movieIndex === -1) {
-    return res.status(404).json({ message: 'Movie not found' })
-  }
-
-  movies.splice(movieIndex, 1)
-
-  return res.json({ message: 'Movie deleted' })
-})
-
-const PORT = process.env.PORT ?? 3000
-
-app.listen(PORT, () => {
-  console.log(`listen on port http://localhost:${PORT}`)
-})
-```
-
-4. modificamos el `moviesSchema.js`:
-```js
-import { z } from 'zod'
-
-const movieSchema = z.object({
-  title: z.string({
-    invalid_type_error: 'Movie title must be a string',
-    required_error: 'Movie title is required'
-  }),
-  year: z.number().int().min(1900).max(2040),
-  director: z.string(),
-  duration: z.number().int().positive(),
-  rate: z.number().min(0).max(10).default(5),
-  poster: z.string().url({
-    message: 'Poster must be a valid URL'
-  }),
-  genre: z.array(
-    z.enum(['Action', 'Drama', 'Comedy', 'Fantasy', 'Romance', 'Horror', 'Thriller', 'Sci-Fi', 'Crime', 'Biography'], {
-      required_error: 'Genre is required',
-      invalid_type_error: 'Genre must be an array of enum Genre'
-    })
-  )
-})
-
-export function validateMovie (object) {
-  return movieSchema.safeParse(object)
-}
-
-export function validatePartialMovie (object) {
-  return movieSchema.partial().safeParse(object)
 }
 ```
 
-5. la forma de importar el JSON se separo la logica en `utils.js`
-
-# Aplicando MVC
-
-1. primero se crea la carpeta routes y dentro de esta `movies.js` que contendra todas las rutas referentes a movies, vease como el controller en java spring boot
-2. separaremos la logica de `app.js` y la agregaremos a `movies.js` quedando de momento asi
+7. Modificamos el /controllers/movies.js
 ```js
-// app.js
-import express, { json } from 'express'
-import cors from 'cors'
-
-const app = express()
-
-// middleware del cors
-app.use(cors({
-  origin: (origin, callback) => {
-    const ACCEPTED_ORIGINS = [
-      'http://localhost:8080',
-      'http://localhost:1234',
-      'https://movies.com',
-      'https://midu.dev'
-    ]
-
-    if (ACCEPTED_ORIGINS.includes(origin)) {
-      return callback(null, true)
-    }
-
-    if (!origin) {
-      return callback(null, true)
-    }
-
-    return callback(new Error('Not allowed by CORS'))
-  }
-}))
-
-app.disable('x-powered-by')
-
-app.use(json())
-
-app.get('/movies') // TODO
-
-app.get('/movies/:id') // TODO
-
-app.post('/movies') // TODO
-
-app.patch('/movies/:id') // TODO
-
-app.delete('/movies/:id') // TODO
-
-const PORT = process.env.PORT ?? 3000
-
-app.listen(PORT, () => {
-  console.log(`listen on port http://localhost:${PORT}`)
-})
+// import { MovieModel } from '../models/local-file-system/movie.js'
+import { MovieModel } from '../models/mysql/movie.js'
+.
+.
 ```
 
----
-
+8. Probamos que todo este en orden
+9. Modificamos el getAll:
 ```js
-// routes/movies.js
-import { Router } from 'express'
-import { importJSON } from '../utils.js'
+export class MovieModel {
+  static async getAll ({ genre }) {
+    // obtener peliculas por genero ?genre=GENRE
+    if (genre) {
+      const lowerCaseGenre = genre.toLowerCase()
+
+      const [genres] = await connection.query(getGenreByNameQ, [lowerCaseGenre])
+
+      if (genres.length === 0) return []
+
+      const [{ ID }] = genres
+
+      // obtener todas id de las peliculas, query a movie_genre, join y devolver el resultado
+      const [movies] = await connection.query(getMoviesByGenreQ, [ID])
+
+      return movies
+    }
+
+    // retorna las movies y la info de la tabla, se desestructura para solo tener las movies
+    const [movies] = await connection.query(getAllMoviesQ)
+
+    return movies
+  }
+
+  static async getById ({ id }) {
+
+  }
+
+  static async create (input) {
+
+  }
+
+  static async delete ({ id }) {
+
+  }
+
+  static async update ({ id, input }) {
+
+  }
+}
+```
+
+10. las queries estan en su propio archivo /queries/queries.js
+11. recuperar pelicula por id:
+```js
+static async getById ({ id }) {
+  const [movie] = await connection.query(getMovieByIdQ, id)
+
+  if (movie.length === 0) return []
+
+  return movie
+}
+```
+
+12. la querie:
+```sql
+export const getMovieByIdQ = `
+SELECT
+  BIN_TO_UUID(M.ID) AS ID,
+  M.TITLE,
+  M.YEAR,
+  M.DIRECTOR,
+  M.DURATION,
+  M.POSTER,
+  M.RATE,
+  GROUP_CONCAT(G.NAME ORDER BY G.NAME SEPARATOR ', ') AS GENRES
+FROM
+  MOVIE M
+  LEFT JOIN MOVIE_GENRE MG ON M.ID = MG.MOVIE_ID
+  LEFT JOIN GENRE G ON MG.GENRE_ID = G.ID
+WHERE
+  M.ID = UUID_TO_BIN(?)
+GROUP BY
+  M.ID;
+`
+```
+
+13. crear una pelicula (falta los generos):
+```js
+  static async create ({ input }) {
+    const {
+      // eslint-disable-next-line no-unused-vars
+      genre: genreInput,
+      title,
+      year,
+      duration,
+      director,
+      rate,
+      poster
+    } = input
+
+    const [uuiResult] = await connection.query('SELECT UUID() uuid;')
+    const [{ uuid }] = uuiResult
+
+    try {
+      await connection.query(createMovieQ, [uuid, title, year, director, duration, poster, rate])
+    } catch (e) {
+      console.log(e)
+    }
+
+    const [movies] = await connection.query(`
+      SELECT TITLE, YEAR, DIRECTOR, DURATION, POSTER, RATE, BIN_TO_UUID(ID) ID
+      FROM movie WHERE id = UUID_TO_BIN(?);`,
+    [uuid]
+    )
+
+    return movies[0]
+  }
+```
+
+14. la querie:
+```sql
+export const createMovieQ = `
+INSERT INTO MOVIE (
+  ID,
+  TITLE,
+  YEAR,
+  DIRECTOR,
+  DURATION,
+  POSTER,
+  RATE
+) VALUES(
+  UUID_TO_BIN(?),
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?
+);
+`
+```
+
+15. se hace el delete y el update
+
+# Inyeccion de dependencias
+1. Modificamos primero el /controllers/movies.js:
+```js
 import { validateMovie, validatePartialMovie } from '../schemas/moviesSchema.js'
-import { randomUUID } from 'node:crypto'
 
-export const moviesRouter = Router()
-
-const movies = importJSON('./movies.json')
-
-// GET movies
-moviesRouter.get('/', (req, res) => {
-  const { genre } = req.query
-
-  if (genre) {
-    const moviesFiltered = movies.filter(
-      movie => movie.genre.some(g => g.toLowerCase() === genre.toLowerCase())
-    )
-
-    if (moviesFiltered.length === 0) return res.status(404).json({ message: 'Genre not found' })
-
-    return res.json(moviesFiltered)
+export class MovieController {
+  constructor ({ movieModel }) {
+    this.movieModel = movieModel
   }
 
-  res.json(movies)
-})
-
-// GET movie by ID
-moviesRouter.get('/:id', (req, res) => {
-  const { id } = req.params
-  const movie = movies.find(movie => movie.id === id)
-
-  if (movie) return res.json(movie)
-
-  res.status(404).json({ message: 'Movie not found' })
-})
-
-// POST movie
-moviesRouter.post('/', (req, res) => {
-  const result = validateMovie(req.body)
-
-  // alternativa: if(!result.success)
-  if (result.error) {
-    return res.status(400).json({ error: JSON.parse(result.error.message) })
+  getAll = async (req, res) => {
+    const { genre } = req.query
+    const movies = await this.movieModel.getAll({ genre })
+    res.json(movies)
   }
 
-  const newMovie = {
-    id: randomUUID(),
-    ...result.data
+  getById = async (req, res) => {
+    const { id } = req.params
+    const movie = await this.movieModel.getById({ id })
+    if (movie) return res.json(movie)
+    res.status(404).json({ message: 'Movie not found' })
   }
 
-  // SIMULANDO el REST, por que ya sabemos que esto no es lo correcto de guardar el estado en memoria
-  movies.push(newMovie)
+  create = async (req, res) => {
+    const result = validateMovie(req.body)
 
-  res.status(201).json(newMovie)
-})
+    // alternativa: if(!result.success)
+    if (result.error) {
+      return res.status(400).json({ error: JSON.parse(result.error.message) })
+    }
 
-// PATCH movie by ID
-moviesRouter.patch('/:id', (req, res) => {
-  const result = validatePartialMovie(req.body)
+    const newMovie = await this.movieModel.create({ input: result.data })
 
-  if (!result.success) {
-    return res.status(400).json({ error: JSON.parse(result.error.message) })
+    res.status(201).json(newMovie)
   }
 
-  const { id } = req.params
-  const movieIndex = movies.findIndex(movie => movie.id === id)
+  delete = async (req, res) => {
+    const { id } = req.params
+    const state = await this.movieModel.delete({ id })
 
-  if (movieIndex === -1) {
-    return res.status(404).json({ message: 'Movie not found' })
+    if (!state) {
+      return res.status(404).json({ message: 'Movie not found' })
+    }
+
+    return res.json({ message: 'Movie deleted' })
   }
 
-  const updateMovie = {
-    ...movies[movieIndex],
-    ...result.data
+  edit = async (req, res) => {
+    const result = validatePartialMovie(req.body)
+
+    if (!result.success) {
+      return res.status(400).json({ error: JSON.parse(result.error.message) })
+    }
+
+    const { id } = req.params
+
+    const updatedMovie = await this.movieModel.update({ id, input: result.data })
+
+    return res.json(updatedMovie)
   }
-
-  movies[movieIndex] = updateMovie
-
-  return res.json(updateMovie)
-})
-
-// DELETE movie by ID
-moviesRouter.delete('/:id', (req, res) => {
-  const { id } = req.params
-  const movieIndex = movies.findIndex(movie => movie.id === id)
-
-  if (movieIndex === -1) {
-    return res.status(404).json({ message: 'Movie not found' })
-  }
-
-  movies.splice(movieIndex, 1)
-
-  return res.json({ message: 'Movie deleted' })
-})
+}
 ```
 
-3. Luego hacemos que app.js utilice el router:
+2. Modificamos el /routes/movies.js
+```js
+import { Router } from 'express'
+import { MovieController } from '../controllers/movies.js'
+
+export const createMovieRouter = ({ movieModel }) => {
+  const moviesRouter = Router()
+
+  const movieController = new MovieController({ movieModel })
+
+  // GET movies
+  moviesRouter.get('/', movieController.getAll)
+
+  // POST movie
+  moviesRouter.post('/', movieController.create)
+
+  // GET movie by ID
+  moviesRouter.get('/:id', movieController.getById)
+
+  // DELETE movie by ID
+  moviesRouter.delete('/:id', movieController.delete)
+
+  // PATCH movie by ID
+  moviesRouter.patch('/:id', movieController.edit)
+
+  return moviesRouter
+}
+```
+
+3. Modificamos app.js
 ```js
 import express, { json } from 'express'
-import cors from 'cors'
-import { moviesRouter } from './routes/movies.js'
-
-const app = express()
-
-// middleware del cors
-app.use(cors({
-  origin: (origin, callback) => {
-    const ACCEPTED_ORIGINS = [
-      'http://localhost:8080',
-      'http://localhost:1234',
-      'https://movies.com',
-      'https://midu.dev'
-    ]
-
-    if (ACCEPTED_ORIGINS.includes(origin)) {
-      return callback(null, true)
-    }
-
-    if (!origin) {
-      return callback(null, true)
-    }
-
-    return callback(new Error('Not allowed by CORS'))
-  }
-}))
-
-app.disable('x-powered-by')
-
-app.use(json())
-
-// app.get('/movies') // TODO
-
-// app.get('/movies/:id') // TODO
-
-// app.post('/movies') // TODO
-
-// app.patch('/movies/:id') // TODO
-
-// app.delete('/movies/:id') // TODO
-
-app.use('/movies', moviesRouter)
-
-const PORT = process.env.PORT ?? 3000
-
-app.listen(PORT, () => {
-  console.log(`listen on port http://localhost:${PORT}`)
-})
-```
-
-4. Ya que estamos separamos la logica del cors, crea la carpeta middlewares y dentro de esta el archivo `cors.js`:
-```js
-import cors from 'cors'
-
-const ACCEPTED_ORIGINS = [
-  'http://localhost:8080',
-  'http://localhost:1234',
-  'https://movies.com',
-  'https://midu.dev'
-]
-
-export const corsMiddleware = ({ acceptedOrigins = ACCEPTED_ORIGINS } = {}) => cors({
-  origin: (origin, callback) => {
-    if (acceptedOrigins.includes(origin)) {
-      return callback(null, true)
-    }
-
-    if (!origin) {
-      return callback(null, true)
-    }
-
-    return callback(new Error('Not allowed by CORS'))
-  }
-})
-```
-
-5. quedando el app.js de esta manera:
-```js
-import express, { json } from 'express'
-import { moviesRouter } from './routes/movies.js'
+import { createMovieRouter } from './routes/movies.js'
 import { corsMiddleware } from './middlewares/cors.js'
+import { MovieModel } from './models/mysql/movie.js'
 
 const app = express()
 
@@ -434,7 +495,7 @@ app.use(corsMiddleware())
 // middleware del json
 app.use(json())
 
-app.use('/movies', moviesRouter)
+app.use('/movies', createMovieRouter({ movieModel: MovieModel }))
 
 const PORT = process.env.PORT ?? 3000
 
@@ -443,215 +504,61 @@ app.listen(PORT, () => {
 })
 ```
 
-6. Se crean las carpetas controllers, models y views
-7. Dentro de `models` se crea el modelo para pelicula, `movie.js` y se le pasa la logica de las `routes/movies.js`:
+4. Probamos que todo funcione
+5. Se lleva más lejos esto, se modifica el app.js:
 ```js
-// /models/movie.js
-import { importJSON } from '../utils.js'
-import { randomUUID } from 'node:crypto'
+import express, { json } from 'express'
+import { createMovieRouter } from './routes/movies.js'
+import { corsMiddleware } from './middlewares/cors.js'
 
-const movies = importJSON('./movies.json')
+export const createApp = ({ movieModel }) => {
+  const app = express()
 
-export class MovieModel {
-  static async getAll ({ genre }) {
-    if (genre) {
-      return movies.filter(
-        movie => movie.genre.some(g => g.toLowerCase() === genre.toLowerCase())
-      )
-    }
+  app.disable('x-powered-by')
 
-    return movies
-  }
+  // middleware del cors
+  app.use(corsMiddleware())
 
-  static async getById ({ id }) {
-    const movie = movies.find(movie => movie.id === id)
-    return movie
-  }
+  // middleware del json
+  app.use(json())
 
-  static async create (input) {
-    const newMovie = {
-      id: randomUUID(),
-      ...input
-    }
+  app.use('/movies', createMovieRouter({ movieModel }))
 
-    movies.push(newMovie)
+  const PORT = process.env.PORT ?? 3000
 
-    return newMovie
-  }
-
-  static async delete ({ id }) {
-    const movieIndex = movies.findIndex(movie => movie.id === id)
-    if (movieIndex === -1) return false
-
-    movies.splice(movieIndex, 1)
-    return true
-  }
-
-  static async update ({ id, input }) {
-    const movieIndex = movies.findIndex(movie => movie.id === id)
-    if (movieIndex === -1) return false
-
-    movies[movieIndex] = {
-      ...movies[movieIndex],
-      ...input
-    }
-
-    return movies[movieIndex]
-  }
+  app.listen(PORT, () => {
+    console.log(`listen on port http://localhost:${PORT}`)
+  })
 }
 ```
 
----
-
+6. se crea en la raiz el archivo `server-with-mysql.js` y se agrega:
 ```js
-// /routes/movies.js
-import { Router } from 'express'
-import { validateMovie, validatePartialMovie } from '../schemas/moviesSchema.js'
-import { MovieModel } from '../models/move.js'
+import { createApp } from './app.js'
+import { MovieModel } from './models/mysql/movie.js'
 
-export const moviesRouter = Router()
-
-// GET movies
-moviesRouter.get('/', async (req, res) => {
-  const { genre } = req.query
-  const movies = await MovieModel.getAll({ genre })
-  res.json(movies)
-})
-
-// GET movie by ID
-moviesRouter.get('/:id', async (req, res) => {
-  const { id } = req.params
-  const movie = await MovieModel.getById({ id })
-  if (movie) return res.json(movie)
-  res.status(404).json({ message: 'Movie not found' })
-})
-
-// POST movie
-moviesRouter.post('/', async (req, res) => {
-  const result = validateMovie(req.body)
-
-  // alternativa: if(!result.success)
-  if (result.error) {
-    return res.status(400).json({ error: JSON.parse(result.error.message) })
-  }
-
-  const newMovie = await MovieModel.create({ input: result.data })
-
-  res.status(201).json(newMovie)
-})
-
-// PATCH movie by ID
-moviesRouter.patch('/:id', async (req, res) => {
-  const result = validatePartialMovie(req.body)
-
-  if (!result.success) {
-    return res.status(400).json({ error: JSON.parse(result.error.message) })
-  }
-
-  const { id } = req.params
-
-  const updatedMovie = await MovieModel.update({ id, input: result.data })
-
-  return res.json(updatedMovie)
-})
-
-// DELETE movie by ID
-moviesRouter.delete('/:id', async (req, res) => {
-  const { id } = req.params
-  const state = await MovieModel.delete({ id })
-
-  if (!state) {
-    return res.status(404).json({ message: 'Movie not found' })
-  }
-
-  return res.json({ message: 'Movie deleted' })
-})
+createApp({ movieModel: MovieModel })
 ```
 
-8. Se simplifica aun más la logica, en controllers crea `movies.js` y se le agregara la logica de `/routes/movies.js`:
+7. se crea en la raiz el archivo `server-with-local.js` y se agrega:
 ```js
-// /controllers/movies.js
-import { MovieModel } from '../models/movie.js'
-import { validateMovie, validatePartialMovie } from '../schemas/moviesSchema.js'
+import { createApp } from './app.js'
+import { MovieModel } from './models/local-file-system/movie.js'
 
-export class MovieController {
-  static async getAll (req, res) {
-    const { genre } = req.query
-    const movies = await MovieModel.getAll({ genre })
-    res.json(movies)
-  }
-
-  static async getById (req, res) {
-    const { id } = req.params
-    const movie = await MovieModel.getById({ id })
-    if (movie) return res.json(movie)
-    res.status(404).json({ message: 'Movie not found' })
-  }
-
-  static async create (req, res) {
-    const result = validateMovie(req.body)
-
-    // alternativa: if(!result.success)
-    if (result.error) {
-      return res.status(400).json({ error: JSON.parse(result.error.message) })
-    }
-
-    const newMovie = await MovieModel.create({ input: result.data })
-
-    res.status(201).json(newMovie)
-  }
-
-  static async delete (req, res) {
-    const { id } = req.params
-    const state = await MovieModel.delete({ id })
-
-    if (!state) {
-      return res.status(404).json({ message: 'Movie not found' })
-    }
-
-    return res.json({ message: 'Movie deleted' })
-  }
-
-  static async edit (req, res) {
-    const result = validatePartialMovie(req.body)
-
-    if (!result.success) {
-      return res.status(400).json({ error: JSON.parse(result.error.message) })
-    }
-
-    const { id } = req.params
-
-    const updatedMovie = await MovieModel.update({ id, input: result.data })
-
-    return res.json(updatedMovie)
-  }
-}
+createApp({ movieModel: MovieModel })
 ```
 
----
-
-```js
-// /routes/movies.js
-import { Router } from 'express'
-import { MovieController } from '../controllers/movies.js'
-
-export const moviesRouter = Router()
-
-// GET movies
-moviesRouter.get('/', MovieController.getAll)
-
-// GET movie by ID
-moviesRouter.get('/:id', MovieController.getById)
-
-// POST movie
-moviesRouter.post('/', MovieController.create)
-
-// DELETE movie by ID
-moviesRouter.delete('/:id', MovieController.delete)
-
-// PATCH movie by ID
-moviesRouter.patch('/:id', MovieController.edit)
+8. se modifica el package.json:
+```json
+"scripts": {
+  "test": "echo \"Error: no test specified\" && exit 1",
+  "dev:mysql": "node --watch server-with-mysql.js",
+  "dev:local": "node --watch server-with-local.js",
+  "start": "node app.js",
+  "build": "npm install"
+},
 ```
 
-9. hacemos commit de todos los cambios hasta el momento (y después de comprobar que todo esta en orden)
-10. Se agrega en models la carpeta `local-file-system`, mueve ahi el archivo de movies.js y tambien crea la carpeta mysql
+9. ahora solo desde la terminal y el comando correspondiente podemos cambiar entre usar mysql y el localhost
+   1.  `npm run dev:mysql`
+   2.  `npm run dev:local`
